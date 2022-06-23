@@ -9,8 +9,8 @@ import java.lang.Integer.max
 class MyBot : Bot {
 
     private val NUMBER_OF_MOVES: Int = 5
-    private val baseDecay = 0.9
-    private var DECAY = 0.9
+    private val DECAY = 0.9
+    private val MAX_DYNAMITE = 100
 
     private var dynCount: Int = 0
 
@@ -20,47 +20,21 @@ class MyBot : Bot {
 
     var moveProb: Array<Array<Array<Double>>> = Array(NUMBER_OF_MOVES) { Array(NUMBER_OF_MOVES) { Array(NUMBER_OF_MOVES) { 0.0 } } }
 
-    private fun moveToKey(move: Move): Int {
-        return moveKeys[move]!!
-    }
-
     private fun getMoveProb(rounds: List<Round>) {
-        var dynMatter = false
-
-        var consecDynCount = 0
-
-        for(k in max(0, rounds.size - 100) until rounds.size - 1) {
+        for(k in 0 until rounds.size - 1) {
             val currentRound: Round = rounds[k]
             val nextRound: Round = rounds[k + 1]
 
-            val move1 = currentRound.getP1()
-            val move2 = currentRound.getP2()
+            val key1: Int = moveKeys[currentRound.getP1()]!!
+            val key2: Int = moveKeys[currentRound.getP2()]!!
 
-            if(nextRound.getP2() == Move.D && move2 == Move.D){
-                consecDynCount++
+            val actualMoveKey: Int = moveKeys[nextRound.getP2()]!!
+
+            for (q in 0 until NUMBER_OF_MOVES) {
+                moveProb[key1][key2][q] *= DECAY
             }
-            else consecDynCount = 0
 
-            if(consecDynCount >= 3)
-                dynMatter = true
-
-            if((move1 != Move.D && move2 != Move.D) || dynMatter) {
-
-                for (p in 0 until NUMBER_OF_MOVES) {
-                    for (r in 0 until NUMBER_OF_MOVES) {
-                        for (q in 0 until NUMBER_OF_MOVES) {
-                            moveProb[p][r][q] *= DECAY
-                        }
-                    }
-                }
-
-                val key1: Int = moveToKey(move1)
-                val key2: Int = moveToKey(move2)
-
-                val actualMoveKey: Int = moveToKey(nextRound.getP2())
-
-                moveProb[key1][key2][actualMoveKey] += 1.0
-            }
+            moveProb[key1][key2][actualMoveKey] += 1.0
         }
     }
 
@@ -68,49 +42,23 @@ class MyBot : Bot {
         return listOf(Move.R, Move.S, Move.P).shuffled().first()
     }
 
-    private fun checkLost(round: Round): Boolean{
-        val moveMe = round.getP1()
-        val moveOp = round.getP2()
-
-        if(moveMe == Move.W){
-            if(moveOp != Move.D)
-                return true
-        }
-
-        return beatMove[moveMe] == moveOp
-    }
-
     override fun makeMove(gamestate: Gamestate): Move {
         // Are you debugging?
         // Put a breakpoint in this method to see when we make a move
+        if(gamestate.rounds.size < 2){
+            return getRandomMove()
+        }
 
         getMoveProb(rounds=gamestate.rounds)
 
-        var max = 0.0
-        var min = 5000.0
-        var maxMove = 0
-
-        if(gamestate.rounds.size < 2){
-            return getRandomMove()
-        }/*
-
-        if(gamestate.rounds.size < 10){
-            return Move.D
-        }*/
-
-        /*if(gamestate.rounds.size == 10){
-            decideDynBehaviour
-        }*/
-
         val prevRound = gamestate.rounds.last()
 
-        if(checkLost(prevRound)){
-            DECAY *= baseDecay
-        }
-        else DECAY = baseDecay
+        val key1: Int = moveKeys[prevRound.getP1()]!!
+        val key2: Int = moveKeys[prevRound.getP2()]!!
 
-        val key1: Int = moveToKey(prevRound.getP1())
-        val key2: Int = moveToKey(prevRound.getP2())
+        var max = 0.0
+        var min = 10.0
+        var maxMove = 0
 
         for (q in 0 until NUMBER_OF_MOVES) {
             if(moveProb[key1][key2][q] > max) {
@@ -126,11 +74,11 @@ class MyBot : Bot {
         var dontLike = false
 
         if(max - min < 0.3) {
-            dynChance = 32
+            dynChance *= 2
             dontLike = true
         }
 
-        if(dynCount < 100 && (1..dynChance).shuffled().first() == 1) {
+        if(dynCount < MAX_DYNAMITE && (1..dynChance).shuffled().first() == 1) {
             dynCount += 1
             return Move.D
         }
